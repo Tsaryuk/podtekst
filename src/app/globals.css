@@ -1,26 +1,87 @@
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=Lora:ital,wght@0,300;0,400;1,300;1,400&display=swap');
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Фоны */
+  --bg-page:      #F7F4EE;
+  --bg-surface:   #FFFFFF;
+  --bg-muted:     #EFEBE1;
+  --bg-ink-dark:  #1C1814;
+
+  /* Текст */
+  --text-primary:   #1C1814;
+  --text-secondary: #4A3F37;
+  --text-muted:     #7A6E66;
+  --text-faint:     #B0A59C;
+  --text-on-dark:   #F7F4EE;
+
+  /* Акцент — ржавый терракот */
+  --rust:        #B85C38;
+  --rust-light:  #FBF0EB;
+  --rust-border: rgba(184, 92, 56, 0.18);
+
+  /* Успех / рекомендации */
+  --green:        #3B5844;
+  --green-light:  #EAF0EB;
+  --green-border: rgba(59, 88, 68, 0.18);
+
+  /* Золото / эссе */
+  --gold:        #8A6910;
+  --gold-light:  #FBF5E0;
+  --gold-border: rgba(138, 105, 16, 0.18);
+
+  /* Границы */
+  --border:       rgba(0, 0, 0, 0.07);
+  --border-focus: #B85C38;
+
+  /* Радиусы */
+  --r-sm: 8px;
+  --r-md: 14px;
+  --r-lg: 20px;
+  --r-pill: 100px;
+
+  /* Шрифты */
+  --font-serif: 'Playfair Display', Georgia, serif;
+  --font-body:  'Lora', Georgia, serif;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+/* Типографика */
+.text-display  { font: 400 30px/1.2 var(--font-serif); }
+.text-heading  { font: 400 22px/1.3 var(--font-serif); }
+.text-subhead  { font: 600 18px/1.4 var(--font-serif); }
+.text-body     { font: 400 16px/1.75 var(--font-body); }
+.text-body-sm  { font: 400 14px/1.6 var(--font-body); }
+.text-label    { font: 300 11px/1 var(--font-body); letter-spacing: 0.1em; text-transform: uppercase; }
+.text-essay    { font: 400 16px/1.9 var(--font-body); }
+
+/* Анимации */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.result-enter { animation: fadeUp 0.4s ease; }
+
+@keyframes pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(184,92,56,0.3); }
+  60%       { box-shadow: 0 0 0 8px rgba(184,92,56,0); }
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.25; }
 }
 
+@keyframes ldot {
+  0%, 100% { opacity: 0.2; transform: scale(0.8); }
+  50%       { opacity: 1;   transform: scale(1.1); }
+}
+
+/* Базовые стили */
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--bg-page);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
 }
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
