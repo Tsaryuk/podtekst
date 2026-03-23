@@ -1,30 +1,8 @@
 import { NextRequest } from 'next/server'
 import OpenAI from 'openai'
-import { buildAnalystPrompt, WRITER_PROMPT, COACH_PROMPT } from '@/lib/claude/prompts'
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
-
-async function callGPT(systemPrompt: string, userText: string, temperature: number): Promise<string> {
-  const res = await openai.chat.completions.create({
-    model: 'gpt-4o',
-    temperature,
-    max_tokens: 4096,
-    messages: [
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: userText },
-    ],
-  })
-  return res.choices[0]?.message?.content ?? ''
-}
-
-function parseJSON<T>(text: string): T | null {
-  try {
-    const cleaned = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
-    return JSON.parse(cleaned)
-  } catch {
-    return null
-  }
-}
+const ASSISTANT_ID = process.env.OPENAI_ASSISTANT_ID || 'asst_dWM4yFNI72PYFFExKfTiHgMI'
 
 export async function POST(request: NextRequest) {
   const { text, entry_id, context } = await request.json()
@@ -33,112 +11,127 @@ export async function POST(request: NextRequest) {
     return new Response(JSON.stringify({ error: 'missing fields' }), { status: 400 })
   }
 
-  const ctx = context ?? {
-    total_sessions: 0,
-    portrait_text: null,
-    chronic_patterns: [],
-    recent_sessions: [],
-  }
-
+  const ctx = context ?? {}
   const encoder = new TextEncoder()
+
+  // Формируем контекст для ассистента
+  const userMessage = `[КОНТЕКСТ]
+Сессий всего: ${(ctx.total_sessions ?? 0) + 1}
+Портрет: ${ctx.portrait_text || 'Нет данных'}
+Хронические паттерны: ${JSON.stringify(ctx.chronic_patterns ?? [])}
+Средние узлы: ${JSON.stringify(ctx.node_averages ?? {})}
+[/КОНТЕКСТ]
+
+[ЗАПИСЬ ДНЕВНИКА]
+${text}
+[/ЗАПИСЬ]
+
+Проанализируй эту запись. Верни результат строго в формате JSON (без markdown-обёрток):
+{
+  "summary": "одна острая фраза — ключевое наблюдение",
+  "patterns": [{"type":"ТИП","marker":"слово","quote":"цитата ≤15 слов","explanation":"объяснение","severity":1,"is_chronic":false,"positive_dynamics":false}],
+  "narrative": {"agency":"уровень","temporal_focus":"время","emotional_precision":"уровень","narrative_type":"тип"},
+  "speech_vector": {
+    "speech_metrics": {"lexical_density":0.5,"syntactic_complexity":12,"agency_ratio":0.4,"emotional_precision":0.3,"temporal_past":0.5,"temporal_present":0.3,"temporal_future":0.2,"pain_distance":0.6,"top_clusters":["тема1","тема2"]},
+    "nodes": {"acceptance":50,"control":50,"safety":50,"meaning":50,"suppression":50,"intensity":50,"anger_direction":"inward","rationalization":50,"avoidance":50,"projection":50,"agency":50,"self_worth":50,"temporal_integration":50}
+  },
+  "essay": "эссе 3-5 абзацев от первого лица",
+  "recommendations": [{"action":"конкретное действие","why":"связь с узлом","timeframe":"сегодня","pattern_type":"ТИП"}]
+}`
 
   const stream = new ReadableStream({
     async start(controller) {
       try {
-        // Этап 1: Аналитик (паттерны + 13 узлов)
-        const analystPrompt = buildAnalystPrompt(ctx)
-        const analystRaw = await callGPT(analystPrompt, text, 0.3)
-        const analyst = parseJSON<{
-          summary: string
-          patterns: Array<{
-            type: string; marker: string; quote: string
-            explanation: string; severity: number
-            is_chronic: boolean; positive_dynamics: boolean
-          }>
-          narrative: { agency: string; temporal_focus: string; emotional_precision: string; narrative_type: string }
-          speech_vector: {
-            speech_metrics: Record<string, unknown>
-            nodes: Record<string, unknown>
-          }
-          radar_delta: Record<string, number>
-          profile_update_note: string
-        }>(analystRaw)
+        // Создаём thread и отправляем сообщение
+        const thread = await openai.beta.threads.create()
 
-        if (analyst) {
-          controller.enqueue(encoder.encode(
-            `data: ${JSON.stringify({
-              type: 'patterns',
-              data: {
-                summary: analyst.summary,
-                patterns: analyst.patterns,
-                narrative: analyst.narrative,
-                radar_delta: analyst.radar_delta,
-                profile_update_note: analyst.profile_update_note,
-              },
-            })}\n\n`
-          ))
-
-          if (analyst.speech_vector) {
-            controller.enqueue(encoder.encode(
-              `data: ${JSON.stringify({ type: 'nodes', data: analyst.speech_vector })}\n\n`
-            ))
-          }
-        }
-
-        // Этап 2: Писатель (эссе) — стриминг через GPT
-        const essayStream = await openai.chat.completions.create({
-          model: 'gpt-4o',
-          temperature: 0.7,
-          max_tokens: 2048,
-          stream: true,
-          messages: [
-            { role: 'system', content: WRITER_PROMPT },
-            { role: 'user', content: text },
-          ],
+        await openai.beta.threads.messages.create(thread.id, {
+          role: 'user',
+          content: userMessage,
         })
 
-        let fullEssay = ''
-        for await (const chunk of essayStream) {
-          const delta = chunk.choices[0]?.delta?.content
-          if (delta) {
-            fullEssay += delta
+        // Запускаем ассистента со стримингом
+        const run = openai.beta.threads.runs.stream(thread.id, {
+          assistant_id: ASSISTANT_ID,
+        })
+
+        let fullResponse = ''
+
+        run.on('textDelta', (delta) => {
+          if (delta.value) {
+            fullResponse += delta.value
+            // Стримим чанки текста на фронт
             controller.enqueue(encoder.encode(
-              `data: ${JSON.stringify({ type: 'essay_chunk', data: delta })}\n\n`
+              `data: ${JSON.stringify({ type: 'essay_chunk', data: delta.value })}\n\n`
             ))
           }
-        }
+        })
 
-        const essayParsed = parseJSON<{ essay: string }>(fullEssay)
-        const essayText = essayParsed?.essay ?? fullEssay
+        run.on('textDone', () => {
+          // Парсим полный ответ
+          try {
+            const cleaned = fullResponse.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+            const result = JSON.parse(cleaned)
 
-        controller.enqueue(encoder.encode(
-          `data: ${JSON.stringify({ type: 'essay_done', data: essayText })}\n\n`
-        ))
+            // Отправляем паттерны
+            if (result.patterns) {
+              controller.enqueue(encoder.encode(
+                `data: ${JSON.stringify({
+                  type: 'patterns',
+                  data: {
+                    summary: result.summary,
+                    patterns: result.patterns,
+                    narrative: result.narrative,
+                  },
+                })}\n\n`
+              ))
+            }
 
-        // Этап 3: Коуч (рекомендации)
-        const nodesInfo = analyst?.speech_vector?.nodes ? `\nУзлы психики:\n${JSON.stringify(analyst.speech_vector.nodes)}` : ''
-        const coachInput = `Текст пользователя:\n${text}\n\nНайденные паттерны:\n${JSON.stringify(analyst?.patterns ?? [])}${nodesInfo}`
-        const coachRaw = await callGPT(COACH_PROMPT, coachInput, 0.4)
-        const coach = parseJSON<{
-          recommendations: Array<{ action: string; why: string; timeframe: string; pattern_type: string }>
-        }>(coachRaw)
+            // Отправляем узлы
+            if (result.speech_vector) {
+              controller.enqueue(encoder.encode(
+                `data: ${JSON.stringify({ type: 'nodes', data: result.speech_vector })}\n\n`
+              ))
+            }
 
-        if (coach) {
+            // Отправляем эссе
+            if (result.essay) {
+              controller.enqueue(encoder.encode(
+                `data: ${JSON.stringify({ type: 'essay_done', data: result.essay })}\n\n`
+              ))
+            }
+
+            // Отправляем рекомендации
+            if (result.recommendations) {
+              controller.enqueue(encoder.encode(
+                `data: ${JSON.stringify({ type: 'recommendations', data: result.recommendations })}\n\n`
+              ))
+            }
+          } catch {
+            // Если JSON не распарсился — отправляем как эссе
+            controller.enqueue(encoder.encode(
+              `data: ${JSON.stringify({ type: 'essay_done', data: fullResponse })}\n\n`
+            ))
+          }
+
           controller.enqueue(encoder.encode(
-            `data: ${JSON.stringify({ type: 'recommendations', data: coach.recommendations })}\n\n`
+            `data: ${JSON.stringify({ type: 'done' })}\n\n`
           ))
-        }
+          controller.close()
+        })
 
-        controller.enqueue(encoder.encode(
-          `data: ${JSON.stringify({ type: 'done' })}\n\n`
-        ))
+        run.on('error', (err) => {
+          controller.enqueue(encoder.encode(
+            `data: ${JSON.stringify({ type: 'error', data: String(err) })}\n\n`
+          ))
+          controller.close()
+        })
       } catch (err) {
         controller.enqueue(encoder.encode(
           `data: ${JSON.stringify({ type: 'error', data: String(err) })}\n\n`
         ))
+        controller.close()
       }
-
-      controller.close()
     },
   })
 
