@@ -1,5 +1,22 @@
 import type { Metadata, Viewport } from 'next'
+import { Playfair_Display, Lora } from 'next/font/google'
 import './globals.css'
+
+const playfair = Playfair_Display({
+  subsets: ['latin', 'cyrillic'],
+  weight: ['400', '600'],
+  style: ['normal', 'italic'],
+  variable: '--font-serif',
+  display: 'swap',
+})
+
+const lora = Lora({
+  subsets: ['latin', 'cyrillic'],
+  weight: ['400', '500'],
+  style: ['normal', 'italic'],
+  variable: '--font-body',
+  display: 'swap',
+})
 
 export const metadata: Metadata = {
   title: 'ПОДТЕКСТ — Психоаналитический дневник',
@@ -19,8 +36,8 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="ru">
-      <body className="min-h-dvh">{children}</body>
+    <html lang="ru" className={`${playfair.variable} ${lora.variable}`}>
+      <body>{children}</body>
     </html>
   )
 }

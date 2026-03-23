@@ -14,17 +14,14 @@ export default function EssayCard({ essay, streaming, onSaveEdit }: EssayCardPro
   const [editing, setEditing] = useState(false)
   const [editText, setEditText] = useState(essay)
 
-  const handleSave = () => {
-    onSaveEdit?.(editText)
-    setEditing(false)
-  }
+  const handleSave = () => { onSaveEdit?.(editText); setEditing(false) }
 
   return (
-    <Card variant="gold" className="result-enter">
+    <Card variant="gold" className="animate-fade-up">
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
           <span className="text-lg">✏️</span>
-          <h3 className="text-subhead text-[var(--gold)]">Эссе дня</h3>
+          <h3 className="font-serif text-[17px] font-semibold text-[#8A6910]">Эссе дня</h3>
         </div>
         {!editing && !streaming && (
           <Button variant="secondary" size="small" onClick={() => { setEditText(essay); setEditing(true) }}>
@@ -38,8 +35,7 @@ export default function EssayCard({ essay, streaming, onSaveEdit }: EssayCardPro
           <textarea
             value={editText}
             onChange={(e) => setEditText(e.target.value)}
-            className="w-full bg-white border border-[var(--gold-border)] rounded-[10px] p-4 text-essay text-[#2A2018] focus:outline-none focus:border-[var(--gold)] resize-none min-h-[200px]"
-            style={{ fontFamily: 'var(--font-body)' }}
+            className="font-body w-full bg-white border border-[rgba(138,105,16,0.18)] rounded-[10px] p-4 text-[15px] leading-[1.9] text-[#2A2018] focus:outline-none focus:border-[#8A6910] resize-none min-h-[200px]"
           />
           <div className="flex gap-2 mt-3">
             <Button size="small" onClick={handleSave}>Сохранить</Button>
@@ -47,9 +43,9 @@ export default function EssayCard({ essay, streaming, onSaveEdit }: EssayCardPro
           </div>
         </div>
       ) : (
-        <div className="text-essay text-[#2A2018] whitespace-pre-line">
+        <div className="font-body text-[15px] leading-[1.9] text-[#2A2018] whitespace-pre-line">
           {essay}
-          {streaming && <span className="inline-block w-[2px] h-[18px] bg-[var(--gold)] ml-0.5 animate-[blink_1s_ease-in-out_infinite]" />}
+          {streaming && <span className="inline-block w-[2px] h-[18px] bg-[#8A6910] ml-0.5 animate-blink" />}
         </div>
       )}
     </Card>

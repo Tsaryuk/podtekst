@@ -14,34 +14,25 @@ export default function LoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!email) return
-
     setLoading(true)
     setError('')
 
     const supabase = createClient()
     const { error } = await supabase.auth.signInWithOtp({
       email,
-      options: {
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
-      },
+      options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
     })
 
     setLoading(false)
-
-    if (error) {
-      setError(error.message)
-    } else {
-      setSent(true)
-    }
+    if (error) setError(error.message)
+    else setSent(true)
   }
 
   return (
-    <div className="w-full max-w-[400px]">
-      <div className="text-center mb-12">
-        <h1 style={{ font: '400 28px/1.2 var(--font-serif)' }}>
-          ПОДТЕКСТ
-        </h1>
-        <p className="mt-3 text-[16px] italic text-[var(--text-muted)]" style={{ fontFamily: 'var(--font-body)' }}>
+    <div className="w-full max-w-[380px]">
+      <div className="text-center mb-14">
+        <h1 className="font-serif text-[28px] tracking-[-0.01em]">ПОДТЕКСТ</h1>
+        <p className="font-body italic text-[15px] text-[#7A6E66] mt-2">
           Твой голос. Твой психоаналитик.
         </p>
       </div>
@@ -56,25 +47,19 @@ export default function LoginPage() {
             onChange={(e) => setEmail(e.target.value)}
             required
           />
-          {error && (
-            <p className="text-body-sm text-[var(--rust)]">{error}</p>
-          )}
+          {error && <p className="font-body text-sm text-[#B85C38]">{error}</p>}
           <Button type="submit" size="full" disabled={loading}>
             {loading ? 'Отправляю...' : 'Получить ссылку для входа'}
           </Button>
-          <p className="text-body-sm text-[var(--text-faint)] italic text-center">
+          <p className="font-body text-sm text-[#B0A59C] italic text-center">
             Письмо придёт за 30 секунд
           </p>
         </form>
       ) : (
-        <div className="text-center result-enter">
-          <div className="text-5xl mb-4">✉️</div>
-          <h2 style={{ font: '400 20px/1.3 var(--font-serif)' }}>
-            Проверьте почту
-          </h2>
-          <p className="mt-3 text-[var(--text-muted)] text-body-sm">
-            Ссылка действует 10 минут
-          </p>
+        <div className="text-center animate-fade-up">
+          <div className="text-5xl mb-5">✉️</div>
+          <h2 className="font-serif text-xl">Проверьте почту</h2>
+          <p className="font-body text-sm text-[#7A6E66] mt-3">Ссылка действует 10 минут</p>
         </div>
       )}
     </div>

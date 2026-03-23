@@ -4,14 +4,11 @@ interface InsightBannerProps {
 
 export default function InsightBanner({ text }: InsightBannerProps) {
   return (
-    <div className="bg-[var(--bg-ink-dark)] rounded-[var(--r-md)] p-[24px_30px] result-enter">
-      <p className="text-label opacity-45 text-[var(--text-on-dark)] mb-3">
+    <div className="bg-[#1C1814] rounded-[14px] px-7 py-6 animate-fade-up">
+      <p className="font-body text-[11px] font-light tracking-[0.1em] uppercase text-[#F7F4EE] opacity-45 mb-3">
         Ключевой инсайт
       </p>
-      <p
-        className="text-[var(--text-on-dark)]"
-        style={{ font: 'italic 400 20px/1.55 var(--font-serif)' }}
-      >
+      <p className="font-serif italic text-[18px] sm:text-xl leading-[1.55] text-[#F7F4EE]">
         {text}
       </p>
     </div>
