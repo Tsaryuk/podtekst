@@ -40,12 +40,13 @@ export async function updateSession(request: NextRequest) {
     return supabaseResponse
   }
 
+  // TODO: Включить после настройки Supabase Auth
   // Неавторизованных — на логин
-  if (!user && !pathname.startsWith('/api/')) {
-    const url = request.nextUrl.clone()
-    url.pathname = '/login'
-    return NextResponse.redirect(url)
-  }
+  // if (!user && !pathname.startsWith('/api/')) {
+  //   const url = request.nextUrl.clone()
+  //   url.pathname = '/login'
+  //   return NextResponse.redirect(url)
+  // }
 
   return supabaseResponse
 }
