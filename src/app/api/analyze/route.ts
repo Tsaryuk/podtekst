@@ -57,6 +57,10 @@ export async function POST(request: NextRequest) {
             is_chronic: boolean; positive_dynamics: boolean
           }>
           narrative: { agency: string; temporal_focus: string; emotional_precision: string; narrative_type: string }
+          speech_vector: {
+            speech_metrics: Record<string, unknown>
+            nodes: Record<string, unknown>
+          }
           radar_delta: Record<string, number>
           profile_update_note: string
         }>(analystRaw)
@@ -74,6 +78,16 @@ export async function POST(request: NextRequest) {
               },
             })}\n\n`
           ))
+
+          // Отправляем речевой вектор (13 узлов + метрики)
+          if (analyst.speech_vector) {
+            controller.enqueue(encoder.encode(
+              `data: ${JSON.stringify({
+                type: 'nodes',
+                data: analyst.speech_vector,
+              })}\n\n`
+            ))
+          }
         }
 
         // Этап 2: Писатель (эссе) — стриминг
@@ -105,7 +119,8 @@ export async function POST(request: NextRequest) {
         ))
 
         // Этап 3: Коуч (рекомендации)
-        const coachInput = `Текст пользователя:\n${text}\n\nНайденные паттерны:\n${JSON.stringify(analyst?.patterns ?? [])}`
+        const nodesInfo = analyst?.speech_vector?.nodes ? `\nУзлы психики:\n${JSON.stringify(analyst.speech_vector.nodes)}` : ''
+        const coachInput = `Текст пользователя:\n${text}\n\nНайденные паттерны:\n${JSON.stringify(analyst?.patterns ?? [])}${nodesInfo}`
         const coachRaw = await callAgent(COACH_PROMPT, coachInput, 0.4)
         const coach = parseJSON<{
           recommendations: Array<{

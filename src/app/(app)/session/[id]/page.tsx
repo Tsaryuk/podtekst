@@ -3,9 +3,11 @@
 import { useEffect, useState, useRef } from 'react'
 import { useParams, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import { getEntry, saveEntry, type DiaryEntry, type DiaryPattern, type DiaryRecommendation } from '@/lib/store/diary'
+import { getEntry, saveEntry, getProfile, updateProfile, type DiaryEntry, type SpeechVector } from '@/lib/store/diary'
 import LoadingDots from '@/components/diary/LoadingDots'
 import InsightBanner from '@/components/diary/InsightBanner'
+import NodesCard from '@/components/diary/NodesCard'
+import SpeechMetrics from '@/components/diary/SpeechMetrics'
 import PatternCard from '@/components/diary/PatternCard'
 import EssayCard from '@/components/diary/EssayCard'
 import RecsCard from '@/components/diary/RecsCard'
@@ -52,10 +54,21 @@ export default function SessionPage() {
     if (!entry) return
     setPhase('loading')
 
+    const profile = getProfile()
     const res = await fetch('/api/analyze', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: entry.raw_text, entry_id: entry.id }),
+      body: JSON.stringify({
+        text: entry.raw_text,
+        entry_id: entry.id,
+        context: {
+          total_sessions: profile.total_sessions,
+          portrait_text: profile.portrait_text,
+          chronic_patterns: [],
+          recent_sessions: [],
+          node_averages: profile.node_averages,
+        },
+      }),
     })
 
     const reader = res.body?.getReader()
@@ -63,6 +76,7 @@ export default function SessionPage() {
 
     const decoder = new TextDecoder()
     let buffer = ''
+    let accumulatedEssay = ''
 
     while (true) {
       const { done, value } = await reader.read()
@@ -92,17 +106,45 @@ export default function SessionPage() {
             setPhase('patterns')
             break
 
+          case 'nodes':
+            setEntry((prev) => {
+              if (!prev) return prev
+              const sv: SpeechVector = json.data
+              const updated = { ...prev, speech_vector: sv }
+              saveEntry(updated)
+
+              // Обновляем node_averages в профиле
+              const p = getProfile()
+              const newAverages = { ...p.node_averages }
+              const nodes = sv.nodes
+              for (const [key, val] of Object.entries(nodes)) {
+                if (key === 'anger_direction') continue
+                const numVal = val as number
+                const prev = newAverages[key as keyof typeof newAverages]
+                newAverages[key as keyof typeof newAverages] = prev !== undefined
+                  ? Math.round((prev + numVal) / 2)
+                  : numVal
+              }
+              updateProfile({ node_averages: newAverages })
+
+              return updated
+            })
+            break
+
           case 'essay_chunk':
             setEssayStreaming(true)
             if (phase !== 'essay') setPhase('essay')
-            setEssay((prev) => prev + json.data)
+            accumulatedEssay += json.data
+            setEssay(accumulatedEssay)
             break
 
           case 'essay_done':
             setEssayStreaming(false)
+            const finalEssay = json.data || accumulatedEssay
+            setEssay(finalEssay)
             setEntry((prev) => {
               if (!prev) return prev
-              const updated = { ...prev, essay: essay }
+              const updated = { ...prev, essay: finalEssay }
               saveEntry(updated)
               return updated
             })
@@ -150,10 +192,25 @@ export default function SessionPage() {
     return <LoadingDots />
   }
 
+  const profile = getProfile()
+
   return (
     <div className="flex flex-col gap-6">
       {/* Инсайт */}
       {entry.summary && <InsightBanner text={entry.summary} />}
+
+      {/* 13 узлов психики */}
+      {entry.speech_vector?.nodes && (
+        <NodesCard
+          nodes={entry.speech_vector.nodes}
+          previousAverages={profile.node_averages}
+        />
+      )}
+
+      {/* Речевые метрики */}
+      {entry.speech_vector?.speech_metrics && (
+        <SpeechMetrics metrics={entry.speech_vector.speech_metrics} />
+      )}
 
       {/* Паттерны */}
       {entry.patterns.length > 0 && (

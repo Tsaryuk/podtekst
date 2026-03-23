@@ -1,3 +1,54 @@
+export const NODE_NAMES = {
+  acceptance: 'Принятие',
+  control: 'Контроль',
+  safety: 'Безопасность',
+  meaning: 'Смысл',
+  suppression: 'Подавление',
+  intensity: 'Интенсивность',
+  anger_direction: 'Направление гнева',
+  rationalization: 'Рационализация',
+  avoidance: 'Избегание',
+  projection: 'Проекция',
+  agency: 'Агентность',
+  self_worth: 'Самоценность',
+  temporal_integration: 'Временная интеграция',
+} as const
+
+export type NodeName = keyof typeof NODE_NAMES
+
+export interface SpeechMetrics {
+  lexical_density: number
+  syntactic_complexity: number
+  agency_ratio: number
+  emotional_precision: number
+  temporal_past: number
+  temporal_present: number
+  temporal_future: number
+  pain_distance: number
+  top_clusters: string[]
+}
+
+export interface SpeechNodes {
+  acceptance: number
+  control: number
+  safety: number
+  meaning: number
+  suppression: number
+  intensity: number
+  anger_direction: 'inward' | 'outward' | 'diffuse'
+  rationalization: number
+  avoidance: number
+  projection: number
+  agency: number
+  self_worth: number
+  temporal_integration: number
+}
+
+export interface SpeechVector {
+  speech_metrics: SpeechMetrics
+  nodes: SpeechNodes
+}
+
 export interface DiaryPattern {
   type: string
   marker: string
@@ -33,6 +84,7 @@ export interface DiaryEntry {
   }
   recommendations: DiaryRecommendation[]
   recs_completed: Record<string, boolean>
+  speech_vector: SpeechVector | null
   archived: boolean
 }
 
@@ -48,6 +100,10 @@ export interface UserProfile {
   longest_streak: number
   last_session_at: string | null
   plan: 'free' | 'start' | 'pro'
+  node_averages: Partial<Record<NodeName, number>>
+  node_trends: Partial<Record<NodeName, number>>
+  speech_signature: Partial<SpeechMetrics>
+  dominant_nodes: NodeName[]
 }
 
 const ENTRIES_KEY = 'podtekst_entries'
@@ -72,6 +128,10 @@ const defaultProfile: UserProfile = {
   longest_streak: 0,
   last_session_at: null,
   plan: 'free',
+  node_averages: {},
+  node_trends: {},
+  speech_signature: {},
+  dominant_nodes: [],
 }
 
 function isBrowser() {

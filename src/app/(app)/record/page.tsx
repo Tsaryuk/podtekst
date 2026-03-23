@@ -49,6 +49,7 @@ export default function RecordPage() {
       narrative: { agency: '', temporal_focus: '', emotional_precision: '', narrative_type: '' },
       recommendations: [],
       recs_completed: {},
+      speech_vector: null,
       archived: false,
     }
     saveEntry(entry)
