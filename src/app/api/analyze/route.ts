@@ -1,21 +1,20 @@
 import { NextRequest } from 'next/server'
-import Anthropic from '@anthropic-ai/sdk'
+import OpenAI from 'openai'
 import { buildAnalystPrompt, WRITER_PROMPT, COACH_PROMPT } from '@/lib/claude/prompts'
 
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-})
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 
-async function callAgent(systemPrompt: string, userText: string, temperature: number): Promise<string> {
-  const message = await anthropic.messages.create({
-    model: 'claude-sonnet-4-20250514',
-    max_tokens: 4096,
+async function callGPT(systemPrompt: string, userText: string, temperature: number): Promise<string> {
+  const res = await openai.chat.completions.create({
+    model: 'gpt-4o',
     temperature,
-    messages: [{ role: 'user', content: userText }],
-    system: systemPrompt,
+    max_tokens: 4096,
+    messages: [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userText },
+    ],
   })
-  const block = message.content[0]
-  return block.type === 'text' ? block.text : ''
+  return res.choices[0]?.message?.content ?? ''
 }
 
 function parseJSON<T>(text: string): T | null {
@@ -46,9 +45,9 @@ export async function POST(request: NextRequest) {
   const stream = new ReadableStream({
     async start(controller) {
       try {
-        // Этап 1: Аналитик (паттерны)
+        // Этап 1: Аналитик (паттерны + 13 узлов)
         const analystPrompt = buildAnalystPrompt(ctx)
-        const analystRaw = await callAgent(analystPrompt, text, 0.3)
+        const analystRaw = await callGPT(analystPrompt, text, 0.3)
         const analyst = parseJSON<{
           summary: string
           patterns: Array<{
@@ -79,38 +78,36 @@ export async function POST(request: NextRequest) {
             })}\n\n`
           ))
 
-          // Отправляем речевой вектор (13 узлов + метрики)
           if (analyst.speech_vector) {
             controller.enqueue(encoder.encode(
-              `data: ${JSON.stringify({
-                type: 'nodes',
-                data: analyst.speech_vector,
-              })}\n\n`
+              `data: ${JSON.stringify({ type: 'nodes', data: analyst.speech_vector })}\n\n`
             ))
           }
         }
 
-        // Этап 2: Писатель (эссе) — стриминг
-        const essayStream = anthropic.messages.stream({
-          model: 'claude-sonnet-4-20250514',
-          max_tokens: 2048,
+        // Этап 2: Писатель (эссе) — стриминг через GPT
+        const essayStream = await openai.chat.completions.create({
+          model: 'gpt-4o',
           temperature: 0.7,
-          system: WRITER_PROMPT,
-          messages: [{ role: 'user', content: text }],
+          max_tokens: 2048,
+          stream: true,
+          messages: [
+            { role: 'system', content: WRITER_PROMPT },
+            { role: 'user', content: text },
+          ],
         })
 
         let fullEssay = ''
-        for await (const event of essayStream) {
-          if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
-            const chunk = event.delta.text
-            fullEssay += chunk
+        for await (const chunk of essayStream) {
+          const delta = chunk.choices[0]?.delta?.content
+          if (delta) {
+            fullEssay += delta
             controller.enqueue(encoder.encode(
-              `data: ${JSON.stringify({ type: 'essay_chunk', data: chunk })}\n\n`
+              `data: ${JSON.stringify({ type: 'essay_chunk', data: delta })}\n\n`
             ))
           }
         }
 
-        // Парсим JSON из эссе
         const essayParsed = parseJSON<{ essay: string }>(fullEssay)
         const essayText = essayParsed?.essay ?? fullEssay
 
@@ -121,11 +118,9 @@ export async function POST(request: NextRequest) {
         // Этап 3: Коуч (рекомендации)
         const nodesInfo = analyst?.speech_vector?.nodes ? `\nУзлы психики:\n${JSON.stringify(analyst.speech_vector.nodes)}` : ''
         const coachInput = `Текст пользователя:\n${text}\n\nНайденные паттерны:\n${JSON.stringify(analyst?.patterns ?? [])}${nodesInfo}`
-        const coachRaw = await callAgent(COACH_PROMPT, coachInput, 0.4)
+        const coachRaw = await callGPT(COACH_PROMPT, coachInput, 0.4)
         const coach = parseJSON<{
-          recommendations: Array<{
-            action: string; why: string; timeframe: string; pattern_type: string
-          }>
+          recommendations: Array<{ action: string; why: string; timeframe: string; pattern_type: string }>
         }>(coachRaw)
 
         if (coach) {

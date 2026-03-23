@@ -1,4 +1,4 @@
-import Anthropic from '@anthropic-ai/sdk'
+import OpenAI from 'openai'
 import { buildAnalystPrompt, WRITER_PROMPT, COACH_PROMPT, type UserContext } from './prompts'
 import type { DiaryPattern, DiaryRecommendation } from '@/lib/store/diary'
 
@@ -17,31 +17,23 @@ export interface AnalysisResult {
   recommendations: DiaryRecommendation[]
 }
 
-const anthropic = new Anthropic({
-  apiKey: process.env.ANTHROPIC_API_KEY,
-})
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 
-async function callAgent(systemPrompt: string, userText: string, temperature: number): Promise<string> {
-  const message = await anthropic.messages.create({
-    model: 'claude-sonnet-4-20250514',
-    max_tokens: 4096,
+async function callGPT(systemPrompt: string, userText: string, temperature: number): Promise<string> {
+  const res = await openai.chat.completions.create({
+    model: 'gpt-4o',
     temperature,
+    max_tokens: 4096,
     messages: [
+      { role: 'system', content: systemPrompt },
       { role: 'user', content: userText },
     ],
-    system: systemPrompt,
   })
-
-  const block = message.content[0]
-  if (block.type === 'text') {
-    return block.text
-  }
-  return ''
+  return res.choices[0]?.message?.content ?? ''
 }
 
 function parseJSON<T>(text: string): T | null {
   try {
-    // Убираем markdown обёртку если есть
     const cleaned = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
     return JSON.parse(cleaned)
   } catch {
@@ -52,11 +44,10 @@ function parseJSON<T>(text: string): T | null {
 export async function analyzeText(text: string, ctx: UserContext): Promise<AnalysisResult> {
   const analystPrompt = buildAnalystPrompt(ctx)
 
-  // Запускаем 3 агента параллельно
   const [analystRaw, writerRaw, coachRaw] = await Promise.all([
-    callAgent(analystPrompt, text, 0.3),
-    callAgent(WRITER_PROMPT, text, 0.7),
-    callAgent(COACH_PROMPT, text, 0.4),
+    callGPT(analystPrompt, text, 0.3),
+    callGPT(WRITER_PROMPT, text, 0.7),
+    callGPT(COACH_PROMPT, text, 0.4),
   ])
 
   const analyst = parseJSON<{
@@ -83,22 +74,5 @@ export async function analyzeText(text: string, ctx: UserContext): Promise<Analy
     profile_update_note: analyst?.profile_update_note ?? '',
     essay: writer?.essay ?? text,
     recommendations: coach?.recommendations ?? [],
-  }
-}
-
-// Стриминг эссе через Claude
-export async function* streamEssay(text: string): AsyncGenerator<string> {
-  const stream = anthropic.messages.stream({
-    model: 'claude-sonnet-4-20250514',
-    max_tokens: 2048,
-    temperature: 0.7,
-    system: WRITER_PROMPT,
-    messages: [{ role: 'user', content: text }],
-  })
-
-  for await (const event of stream) {
-    if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
-      yield event.delta.text
-    }
   }
 }
